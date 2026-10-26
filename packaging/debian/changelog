@@ -1,3 +1,10 @@
+nouveau-utils (2.2.1-1) unstable; urgency=medium
+
+  * Release v2.2.1: Packaging and code separation.
+  * Standalone release of userspace governor, CLI, and TUI suite.
+
+ -- Twilight0 <twilight0@vivaldi.net>  Mon, 26 Oct 2026 09:45:00 +0200
+
 nouveau-utils (2.2.0-1) unstable; urgency=medium
 
   * Initial standalone release of nouveau-utils.
