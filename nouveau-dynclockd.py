@@ -109,7 +109,7 @@ KNOWN_3D_APPS = {
     "gamescope", "retroarch", "flycast", "pcsx2", "pcsx2-qt", "dolphin-emu",
     "rpcs3", "ppsspp", "PPSSPPQt", "PPSSPPSDL", "duckstation-qt", "cemu",
     "yuzu", "ryujinx", "citra", "citra-qt", "melonDS", "mupen64plus",
-    "blender", "godot", "llama-cli", "llama-server", "llama-bench",
+    "godot", "llama-cli", "llama-server", "llama-bench",
     "ollama_llama_se",
 }
 
@@ -177,7 +177,6 @@ def load_app_profiles():
         "vlc": "07",
         "kodi.bin": "07",
         "bino": "07",
-        "blender": "10",
         "godot": "0f",
     }
     pdir = config.get("PROFILES_DIR", "/etc/nouveau-dynclockd.d")

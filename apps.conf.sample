@@ -19,5 +19,5 @@ vlc = 07
 kodi.bin = 07
 bino = 07
 
-# Example OC profile (P-State 10: 700 MHz core / 900 MHz DDR3)
-# blender = 10
+# Example custom profile
+# godot = 0f
