@@ -1,0 +1,10 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: nouveau-utils
+Upstream-Contact: Twilight0 <twilight0@vivaldi.net>
+Source: https://github.com/Twilight0/nouveau-utils
+
+Files: *
+Copyright: 2026 Twilight0 <twilight0@vivaldi.net>
+License: GPL-2.0-only
+ On Debian systems, the full text of the GNU General Public License version 2
+ can be found in the `/usr/share/common-licenses/GPL-2` file.

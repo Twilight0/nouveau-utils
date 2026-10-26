@@ -1,0 +1,10 @@
+*.pkg.tar.zst
+*.deb
+*.rpm
+build/
+dist/
+src/
+pkg/
+__pycache__/
+*.log
+*.tmp

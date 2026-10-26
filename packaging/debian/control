@@ -1,0 +1,16 @@
+Source: nouveau-utils
+Section: utils
+Priority: optional
+Maintainer: Twilight0 <twilight0@vivaldi.net>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/Twilight0/nouveau-utils
+Rules-Requires-Root: no
+
+Package: nouveau-utils
+Architecture: all
+Depends: ${misc:Depends}, python3, nouveau-dkms
+Suggests: python3-curses
+Description: Userspace dynamic governor, CLI, and TUI for Nouveau
+ Userspace dynamic frequency governor, command-line management tool,
+ and interactive curses TUI for Nouveau GPU reclocking.
