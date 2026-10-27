@@ -1,5 +1,5 @@
 Name:           nouveau-utils
-Version:        2.2.1
+Version:        2.2.3
 Release:        1%{?dist}
 Summary:        Userspace dynamic governor, CLI, and TUI for Nouveau
 License:        GPL-2.0-only
@@ -58,6 +58,10 @@ install -Dm644 %{SOURCE2} %{buildroot}%{_unitdir}/nouveau-dynclockd.service
 %{_sysconfdir}/nouveau-dynclockd.d/apps.conf.sample
 
 %changelog
+* Tue Oct 27 2026 Twilight0 <twilight0@vivaldi.net> - 2.2.3-1
+- Release v2.2.3: De-bounce interrupt load detection on 120Hz/144Hz displays.
+- Raise default INTERRUPT_THRESHOLD to 250 IRQs/s to eliminate false upclocks from idle VBlank interrupts.
+
 * Mon Oct 26 2026 Twilight0 <twilight0@vivaldi.net> - 2.2.1-1
 - Release v2.2.1: Packaging and code separation.
 - Standalone release of userspace utilities.

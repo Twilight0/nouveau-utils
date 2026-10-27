@@ -134,7 +134,7 @@ DEFAULT_CONFIG = {
     "BATTERY_CAP": True,
     "DISPLAY_120HZ_FLOOR": True,
     "ALLOW_OC_10": False,
-    "INTERRUPT_THRESHOLD": 100,
+    "INTERRUPT_THRESHOLD": 250,
     "PROFILES_DIR": "/etc/nouveau-dynclockd.d",
 }
 
@@ -606,7 +606,7 @@ def detect_dedicated_3d_client(irq_rate=0.0, power="AC"):
     prev_client_ticks = current_client_ticks
 
     # 4. Check hardware interrupt rate threshold
-    irq_thresh = config.get("INTERRUPT_THRESHOLD", 100)
+    irq_thresh = config.get("INTERRUPT_THRESHOLD", 250)
     if irq_rate >= irq_thresh and len(current_client_ticks) > 0:
         return True, f"Hardware GPU Load ({int(irq_rate)} IRQs/s)", "0f"
 
