@@ -1,7 +1,7 @@
 # Maintainer: Twilight0 <https://github.com/Twilight0>
 pkgname=nouveau-utils
-pkgver=2.2.3
-pkgrel=2
+pkgver=2.2.4
+pkgrel=1
 pkgdesc="Userspace dynamic frequency governor, CLI management tool, and interactive TUI for Nouveau"
 arch=('any')
 url="https://github.com/Twilight0/nouveau-utils"
@@ -21,8 +21,8 @@ source=(
   "nouveau-tui"
   "apps.conf.sample"
 )
-sha256sums=('d604c631b48d4556fa61b3bb4c8bc54a5c0fa165ce2c526e8d22d63393543cf6'
-            '228f2042cef66d0536872b5bed4252ca0ea166d34527a2a21e5466c20ed5c0eb'
+sha256sums=('cbe2d1ce8a7331e2cee2da2cc17afb8ec15b3164fdea5d068c42f0554b278081'
+            'f522e550ca9d5d8b46b8cc86eb7673de63b639fffaaac10cc0a6d51d1ca8efef'
             '87f698b1de37689cb3889bfae916ceaba1caca634ab6a653b1602bda613b20e4'
             'd46e9f4796ffd5386fe1376a6f38205f6098f550636b9bc693d6bf6fc4496f9c'
             'a58f3aea24b5ed07bbebb744807b53585d0498c1e24f457b31127cb43459a158'

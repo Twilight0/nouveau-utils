@@ -134,7 +134,7 @@ DEFAULT_CONFIG = {
     "BATTERY_CAP": True,
     "DISPLAY_120HZ_FLOOR": True,
     "ALLOW_OC_10": False,
-    "INTERRUPT_THRESHOLD": 250,
+    "INTERRUPT_THRESHOLD": 1000,
     "PROFILES_DIR": "/etc/nouveau-dynclockd.d",
 }
 
@@ -389,70 +389,172 @@ def get_active_display_info():
         except Exception:
             pass
 
-    # Query active CRTC modes via libdrm
+    # Query active CRTC modes from kernel DRM atomic state in debugfs.
+    # IMPORTANT: Do NOT call os.open('/dev/dri/card0') in a polling loop!
+    # Every open()/close() on /dev/dri/card0 invokes nouveau_drm_open() ->
+    # nouveau_vmm_init() -> g84_bar_flush(), allocating and tearing down
+    # full GPU page tables and hammering BAR1 on every poll tick.
+    for state_path in ("/sys/kernel/debug/dri/0/state", "/sys/kernel/debug/dri/0000:01:00.0/state"):
+        if not os.path.exists(state_path):
+            continue
+        try:
+            crtc_active = False
+            with open(state_path, "r") as f:
+                for line in f:
+                    s = line.strip()
+                    if s.startswith("crtc["):
+                        crtc_active = False
+                    elif s.startswith("active="):
+                        crtc_active = (s.split("=", 1)[1].strip() == "1")
+                    elif crtc_active and s.startswith("mode:"):
+                        # Format: mode: "1920x1080": 60 148500 1920 ...
+                        parts = s.split(":")
+                        if len(parts) >= 3:
+                            nums = parts[2].split()
+                            if len(nums) >= 2 and nums[0].isdigit() and nums[1].isdigit():
+                                ref = int(nums[0])
+                                clk = int(nums[1])
+                                if clk > max_clock_khz:
+                                    max_clock_khz = clk
+                                if ref > max_refresh_hz:
+                                    max_refresh_hz = ref
+            if max_clock_khz > 0:
+                break
+        except Exception:
+            pass
+
+    return max_clock_khz, max_refresh_hz, display_active
+
+
+_SAVED_PCI_STATE = None
+
+
+def init_pcie_link_protection():
+    """
+    Disables PCIe ASPM L0s/L1 on the NVIDIA GPU link (00:01.0 -> 01:00.0) so
+    Root Port ASPM transitions cannot collide with GPU clock/link state changes,
+    and snapshots valid BAR/MSI registers for instant self-healing if a bus reset occurs.
+    """
+    global _SAVED_PCI_STATE
+    import struct
+
+    for aspm_node in (
+        "/sys/bus/pci/devices/0000:01:00.0/link/l1_aspm",
+        "/sys/bus/pci/devices/0000:01:00.0/link/l0s_aspm",
+        "/sys/bus/pci/devices/0000:01:00.0/link/clkpm",
+    ):
+        if os.path.exists(aspm_node):
+            try:
+                with open(aspm_node, "w") as f:
+                    f.write("0\n")
+            except Exception:
+                pass
+
+    cfg_path = "/sys/bus/pci/devices/0000:01:00.0/config"
+    res_path = "/sys/bus/pci/devices/0000:01:00.0/resource"
+    if not os.path.exists(cfg_path) or not os.path.exists(res_path):
+        return
+
     try:
-        class drmModeRes(ctypes.Structure):
-            _fields_ = [
-                ('count_fbs', ctypes.c_int), ('fbs', ctypes.c_void_p),
-                ('count_crtcs', ctypes.c_int), ('crtcs', ctypes.POINTER(ctypes.c_uint32)),
-                ('count_connectors', ctypes.c_int), ('connectors', ctypes.c_void_p),
-                ('count_encoders', ctypes.c_int), ('encoders', ctypes.c_void_p),
-                ('min_width', ctypes.c_uint32), ('max_width', ctypes.c_uint32),
-                ('min_height', ctypes.c_uint32), ('max_height', ctypes.c_uint32),
-            ]
+        # Parse kernel resource table for authoritative BAR base addresses
+        bars = [0] * 6
+        with open(res_path, "r") as f:
+            lines = [l.strip().split() for l in f.readlines()[:6]]
+        for idx, parts in enumerate(lines):
+            if len(parts) >= 3:
+                start = int(parts[0], 16)
+                flags = int(parts[2], 16)
+                if start != 0:
+                    if flags & 0x1:  # I/O BAR
+                        bars[idx] = (start & 0xFFFFFFFC) | 0x1
+                    else:
+                        bars[idx] = (start & 0xFFFFFFF0) | (flags & 0xF)
 
-        class drmModeModeInfo(ctypes.Structure):
-            _fields_ = [
-                ('clock', ctypes.c_uint32),
-                ('hdisplay', ctypes.c_uint16), ('hsync_start', ctypes.c_uint16),
-                ('hsync_end', ctypes.c_uint16), ('htotal', ctypes.c_uint16),
-                ('hskew', ctypes.c_uint16),
-                ('vdisplay', ctypes.c_uint16), ('vsync_start', ctypes.c_uint16),
-                ('vsync_end', ctypes.c_uint16), ('vtotal', ctypes.c_uint16),
-                ('vscan', ctypes.c_uint16),
-                ('vrefresh', ctypes.c_uint32),
-                ('flags', ctypes.c_uint32), ('type', ctypes.c_uint32),
-                ('name', ctypes.c_char * 32)
-            ]
-
-        class drmModeCrtc(ctypes.Structure):
-            _fields_ = [
-                ('crtc_id', ctypes.c_uint32),
-                ('buffer_id', ctypes.c_uint32),
-                ('x', ctypes.c_uint32), ('y', ctypes.c_uint32),
-                ('width', ctypes.c_uint32), ('height', ctypes.c_uint32),
-                ('mode_valid', ctypes.c_int),
-                ('mode', drmModeModeInfo),
-                ('gamma_size', ctypes.c_int)
-            ]
-
-        drm = ctypes.CDLL('libdrm.so.2')
-        drm.drmModeGetResources.restype = ctypes.POINTER(drmModeRes)
-        drm.drmModeGetCrtc.restype = ctypes.POINTER(drmModeCrtc)
-
-        card_path = '/dev/dri/card0'
-        if os.path.exists(card_path):
-            fd = os.open(card_path, os.O_RDONLY)
-            res = drm.drmModeGetResources(fd)
-            if res:
-                r = res.contents
-                for i in range(r.count_crtcs):
-                    crtc_id = r.crtcs[i]
-                    crtc = drm.drmModeGetCrtc(fd, crtc_id)
-                    if crtc:
-                        c = crtc.contents
-                        if c.mode_valid and c.mode.clock > 0:
-                            if c.mode.clock > max_clock_khz:
-                                max_clock_khz = c.mode.clock
-                            if c.mode.vrefresh > max_refresh_hz:
-                                max_refresh_hz = c.mode.vrefresh
-                        drm.drmModeFreeCrtc(crtc)
-                drm.drmModeFreeResources(res)
-            os.close(fd)
+        with open(cfg_path, "rb") as f:
+            cfg = f.read(256)
+        if len(cfg) >= 0x78:
+            msi_ctrl, msi_addr_lo, msi_addr_hi, msi_data = struct.unpack_from("<HIIH", cfg, 0x6A)
+            # Fallback if MSI was not yet populated in config
+            if msi_addr_lo == 0:
+                msi_addr_lo = 0xFEE07000
+                msi_data = 0x0021
+                msi_ctrl |= 0x0001
+            _SAVED_PCI_STATE = {
+                "bars": bars,
+                "msi_ctrl": msi_ctrl | 0x0001,
+                "msi_addr_lo": msi_addr_lo,
+                "msi_addr_hi": msi_addr_hi,
+                "msi_data": msi_data,
+            }
     except Exception:
         pass
 
-    return max_clock_khz, max_refresh_hz, display_active
+
+def check_and_heal_pcie_config():
+    """
+    Checks if a PCIe hot reset wiped 0000:01:00.0's Command/BAR/MSI registers
+    (which causes MMIO reads to return 0xffffffff and hangs the desktop).
+    If wiped, restores BARs, MSI, Command (0x0407 with DisINTx+), and rearms MSI (0x704=0xff).
+    """
+    if not _SAVED_PCI_STATE:
+        return False
+    import struct
+    cfg_path = "/sys/bus/pci/devices/0000:01:00.0/config"
+    try:
+        with open(cfg_path, "rb") as f:
+            hdr = f.read(0x28)
+        if len(hdr) < 0x28:
+            return False
+        cmd = struct.unpack_from("<H", hdr, 0x04)[0]
+        bar0 = struct.unpack_from("<I", hdr, 0x10)[0]
+        if (cmd & 0x02) != 0 and bar0 != 0:
+            return False
+
+        # PCI config space was wiped by a link reset! Restore immediately.
+        bars = _SAVED_PCI_STATE["bars"]
+        with open(cfg_path, "r+b", buffering=0) as f:
+            # 1. Restore BAR0..BAR5
+            f.seek(0x10)
+            f.write(struct.pack("<6I", *bars))
+            # 2. Restore MSI address, data, and enable bit BEFORE enabling memory/busmaster
+            f.seek(0x6A)
+            f.write(
+                struct.pack(
+                    "<HIIH",
+                    _SAVED_PCI_STATE["msi_ctrl"],
+                    _SAVED_PCI_STATE["msi_addr_lo"],
+                    _SAVED_PCI_STATE["msi_addr_hi"],
+                    _SAVED_PCI_STATE["msi_data"],
+                )
+            )
+            # 3. Enable I/O + Mem + BusMaster + DisINTx (0x0407) so legacy IRQ 16 is never asserted
+            f.seek(0x04)
+            f.write(struct.pack("<H", 0x0407))
+            # 4. Rearm NVIDIA Fermi MSI edge latch at extended PCI config offset 0x704
+            f.seek(0x704)
+            f.write(b"\xff")
+
+        # Also restore HDMI audio companion 0000:01:00.1 if present
+        aud_cfg = "/sys/bus/pci/devices/0000:01:00.1/config"
+        aud_res = "/sys/bus/pci/devices/0000:01:00.1/resource"
+        if os.path.exists(aud_cfg) and os.path.exists(aud_res):
+            with open(aud_res, "r") as rf:
+                first_line = rf.readline().strip().split()
+            if len(first_line) >= 3:
+                aud_bar0 = int(first_line[0], 16) & 0xFFFFFFF0
+                if aud_bar0:
+                    with open(aud_cfg, "r+b", buffering=0) as af:
+                        af.seek(0x10)
+                        af.write(struct.pack("<I", aud_bar0))
+                        af.seek(0x04)
+                        af.write(struct.pack("<H", 0x0006))
+
+        print("[!] PCIe link reset detected on 0000:01:00.0! Restored BARs, MSI, and Command registers live.")
+        sys.stdout.flush()
+        return True
+    except Exception as e:
+        print(f"Warning: PCIe self-heal failed: {e}", file=sys.stderr)
+        return False
 
 
 def get_effective_idle_state(display_info=None):
@@ -796,6 +898,7 @@ def main():
     signal.signal(signal.SIGHUP, handle_sighup)
 
     load_config()
+    init_pcie_link_protection()
     battery_throttled = False
 
     disp_clk, disp_ref, disp_active = get_active_display_info()
@@ -832,6 +935,9 @@ def main():
 
     while True:
         now = time.monotonic()
+
+        # Verify PCIe config space integrity (auto-heal if link reset wiped BARs/MSI)
+        check_and_heal_pcie_config()
 
         # Check for config file changes
         check_config_reload()

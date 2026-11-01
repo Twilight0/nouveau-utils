@@ -1,3 +1,16 @@
+nouveau-utils (2.2.4-1) unstable; urgency=medium
+
+  * Release v2.2.4: PCIe link protection, CRTC debugfs polling, and reclocking de-bounce.
+  * Raise default INTERRUPT_THRESHOLD from 250 to 1000 IRQs/s to eliminate false-positive
+    DDR3 memory reclocking and PCIe link renegotiation during continuous 2D desktop usage.
+  * Query active CRTC modes via debugfs atomic state instead of polling /dev/dri/card0
+    via libdrm, eliminating repetitive page table init/teardown and BAR1 flushes.
+  * Add PCIe link protection: disable ASPM L0s/L1 transitions on GPU link and implement
+    live config space self-healing to restore BARs, MSI, Command (0x0407), and rearm
+    Fermi MSI latch (0x704) on bus reset.
+
+ -- Twilight0 <twilight0@vivaldi.net>  Sun, 01 Nov 2026 23:00:00 +0200
+
 nouveau-utils (2.2.3-1) unstable; urgency=medium
 
   * Release v2.2.3: De-bounce interrupt load detection on 120Hz/144Hz displays.

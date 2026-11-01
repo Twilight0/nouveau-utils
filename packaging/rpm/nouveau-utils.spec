@@ -1,5 +1,5 @@
 Name:           nouveau-utils
-Version:        2.2.3
+Version:        2.2.4
 Release:        1%{?dist}
 Summary:        Userspace dynamic governor, CLI, and TUI for Nouveau
 License:        GPL-2.0-only
@@ -58,6 +58,12 @@ install -Dm644 %{SOURCE2} %{buildroot}%{_unitdir}/nouveau-dynclockd.service
 %{_sysconfdir}/nouveau-dynclockd.d/apps.conf.sample
 
 %changelog
+* Sun Nov 01 2026 Twilight0 <twilight0@vivaldi.net> - 2.2.4-1
+- Release v2.2.4: PCIe link protection, CRTC debugfs polling, and reclocking de-bounce.
+- Raise default INTERRUPT_THRESHOLD to 1000 IRQs/s to eliminate false memory reclocking.
+- Avoid repetitive BAR1 flushes and VMM churn by polling CRTC state via debugfs.
+- Add PCIe ASPM protection and live BAR/MSI auto-heal on link reset.
+
 * Tue Oct 27 2026 Twilight0 <twilight0@vivaldi.net> - 2.2.3-1
 - Release v2.2.3: De-bounce interrupt load detection on 120Hz/144Hz displays.
 - Raise default INTERRUPT_THRESHOLD to 250 IRQs/s to eliminate false upclocks from idle VBlank interrupts.
