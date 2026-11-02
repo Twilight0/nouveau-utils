@@ -1,17 +1,52 @@
-name: Build & Release nouveau-utils Packages
+name: Test, Build & Release nouveau-utils Packages
 
 on:
   push:
+    branches:
+      - main
+      - master
     tags:
       - 'v*'
+  pull_request:
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  test-suite:
+    name: Unit & Integration Tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13', '3.14']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Run unit & integration test suite
+        run: |
+          make check
+
+      - name: Verify Makefile install staging layout
+        run: |
+          make install DESTDIR=/tmp/nouveau-utils-stage
+          test -x /tmp/nouveau-utils-stage/usr/bin/nouveau-ctrl
+          test -x /tmp/nouveau-utils-stage/usr/bin/nouveau-tui
+          test -x /tmp/nouveau-utils-stage/usr/bin/nouveau-dynclockd.py
+          test -L /tmp/nouveau-utils-stage/usr/bin/nouveau-dynclockd
+          test -f /tmp/nouveau-utils-stage/etc/nouveau-dynclockd.conf
+          test -f /tmp/nouveau-utils-stage/usr/lib/systemd/system/nouveau-dynclockd.service
+
   build-arch:
     name: Build Arch Linux Package (.pkg.tar.zst)
+    needs: test-suite
     runs-on: ubuntu-latest
     container:
       image: archlinux:base-devel
@@ -26,18 +61,19 @@ jobs:
           echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
           chown -R builder:builder "$GITHUB_WORKSPACE"
 
-      - name: Build package with makepkg
+      - name: Run test suite on Arch Linux Python 3.14 & build package
         run: |
-          su builder -c "makepkg -s --nodeps --noconfirm"
+          su builder -c "make check && makepkg -s --nodeps --noconfirm"
 
       - name: Upload Arch package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: arch-package
+          name: nouveau-utils-arch-pkg
           path: "*.pkg.tar.zst"
 
   build-debian:
     name: Build Debian / Ubuntu Package (.deb)
+    needs: test-suite
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -61,11 +97,12 @@ jobs:
       - name: Upload Debian package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: debian-package
+          name: nouveau-utils-debian-deb
           path: dist/deb/*.deb
 
   build-rpm:
     name: Build Fedora / RHEL Package (.rpm)
+    needs: test-suite
     runs-on: ubuntu-latest
     container:
       image: fedora:latest
@@ -93,29 +130,59 @@ jobs:
       - name: Upload RPM package artifact
         uses: actions/upload-artifact@v4
         with:
-          name: rpm-package
+          name: nouveau-utils-fedora-rpm
           path: dist/rpm/*.rpm
 
-  release:
-    name: Publish Release Assets to GitHub
+  bundle-packages:
+    name: Bundle Install-Ready Distro Packages
     needs: [build-arch, build-debian, build-rpm]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: release-assets
           merge-multiple: true
 
-      - name: Generate Checksums
+      - name: Generate Checksums & CI Summary
         run: |
           cd release-assets
           sha256sum * > SHA256SUMS.txt
-          cat SHA256SUMS.txt
+          {
+            echo "## 📦 Install-Ready \`nouveau-utils\` Packages"
+            echo ""
+            echo "| Distribution Family | Artifact Name | Install Command |"
+            echo "| :--- | :--- | :--- |"
+            echo "| **Arch Linux / CachyOS / Manjaro** | \`nouveau-utils-arch-pkg\` | \`sudo pacman -U nouveau-utils-*.pkg.tar.zst\` |"
+            echo "| **Debian / Ubuntu / Mint / Pop!_OS** | \`nouveau-utils-debian-deb\` | \`sudo apt install ./nouveau-utils_*.deb\` |"
+            echo "| **Fedora / RHEL / openSUSE** | \`nouveau-utils-fedora-rpm\` | \`sudo dnf install ./nouveau-utils-*.noarch.rpm\` |"
+            echo ""
+            echo "### Checksums (\`SHA256SUMS.txt\`)"
+            echo "\`\`\`text"
+            cat SHA256SUMS.txt
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload unified multi-distro package bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: nouveau-utils-all-distros
+          path: release-assets/*
+
+  release:
+    name: Publish Release Assets to GitHub
+    needs: [bundle-packages]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download unified package bundle
+        uses: actions/download-artifact@v4
+        with:
+          name: nouveau-utils-all-distros
+          path: release-assets
 
       - name: Attach artifacts to GitHub Release
         env:
@@ -123,6 +190,6 @@ jobs:
         run: |
           TAG="${{ github.ref_name }}"
           if ! gh release view "$TAG" >/dev/null 2>&1; then
-            gh release create "$TAG" --title "$TAG" --notes "Release $TAG: Packaging and code separation"
+            gh release create "$TAG" --title "$TAG" --notes "Release $TAG: nouveau-utils governance and telemetry suite"
           fi
           gh release upload "$TAG" release-assets/* --clobber

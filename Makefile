@@ -6,8 +6,12 @@ PREFIX ?= /usr
 all:
 	@echo "Nouveau Userspace Governance & Telemetry Suite (v$(VERSION))"
 	@echo "Available targets:"
+	@echo "  make check    - Run unit and integration test suite"
 	@echo "  make install  - Install binaries, configs, and service to DESTDIR"
 	@echo "  make clean    - Clean build/packaging artifacts"
+
+check test:
+	python3 -m unittest discover -s tests -v
 
 install:
 	# Binaries
@@ -27,4 +31,4 @@ install:
 clean:
 	rm -rf *.pkg.tar.zst *.deb *.rpm build/ dist/
 
-.PHONY: all install clean
+.PHONY: all check test install clean
