@@ -116,7 +116,7 @@ KNOWN_3D_APPS = {
 # Processes to monitor for active CPU/GPU rendering load (WebGL, Canvas, video decoding -> State 07)
 MONITORED_APPS = {
     "cinnamon", "Xorg", "Xwayland", "qtile", "gnome-shell", "kwin_wayland", "mutter",
-    "vivaldi", "vivaldi-bin", "firefox", "firefox-bin", "chromium", "chrome",
+    "vivaldi", "vivaldi-bin", "firefox", "firefox-bin", "firefox-esr", "chromium", "chrome",
     "brave", "brave-bin", "code", "electron", "mpv", "vlc", "kodi", "kodi.bin",
     "pycharm", "java", "xdg-desktop-por",
 }
