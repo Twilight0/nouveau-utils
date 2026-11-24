@@ -1,3 +1,11 @@
+nouveau-utils (2.2.5-1) unstable; urgency=medium
+
+  * Release v2.2.5: Fix post-S3 resume reclocking stall when debugfs pstate lacks '*'.
+  * Remove truthy guard on get_current_pstate() in both manual lock and auto
+    governor loops so nouveau-dynclockd re-applies target pstate after suspend/resume.
+
+ -- Twilight0 <twilight0@vivaldi.net>  Tue, 24 Nov 2026 19:30:00 +0200
+
 nouveau-utils (2.2.4-1) unstable; urgency=medium
 
   * Release v2.2.4: PCIe link protection, CRTC debugfs polling, and reclocking de-bounce.

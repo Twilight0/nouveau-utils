@@ -980,7 +980,7 @@ def main():
         if manual_state:
             target_state = "07" if (thermal_throttled and manual_state in ("0f", "10")) else manual_state
             current_hardware_state = get_current_pstate()
-            if current_hardware_state and current_hardware_state != target_state:
+            if current_hardware_state != target_state:
                 set_pstate(target_state, f"manual lock {manual_state}")
                 current_hardware_state = get_current_pstate()
 
@@ -1055,7 +1055,7 @@ def main():
 
         if target_state:
             current_hardware_state = get_current_pstate()
-            if current_hardware_state and current_hardware_state != target_state:
+            if current_hardware_state != target_state:
                 set_pstate(target_state, reason)
                 current_hardware_state = get_current_pstate()
 

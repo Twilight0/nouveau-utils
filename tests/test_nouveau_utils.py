@@ -85,6 +85,14 @@ class TestSyntaxAndArchitectureGuards(unittest.TestCase):
                 self.assertNotIn("os.open", calls)
                 self.assertNotIn("fcntl.ioctl", calls)
 
+    def test_no_truthy_guard_on_current_hardware_state(self):
+        """Regression test (v2.2.5): None from get_current_pstate() (post-S3 missing '*') must still call set_pstate()."""
+        path = os.path.join(REPO_ROOT, "nouveau-dynclockd.py")
+        with open(path, "r", encoding="utf-8") as f:
+            src = f.read()
+        self.assertNotIn("if current_hardware_state and current_hardware_state != target_state:", src)
+        self.assertEqual(src.count("if current_hardware_state != target_state:"), 2)
+
 
 class TestGovernorLogic(unittest.TestCase):
     """Tests nouveau-dynclockd.py functions using isolated temporary filesystems."""
