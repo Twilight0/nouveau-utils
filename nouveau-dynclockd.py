@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-nouveau-dynclockd — Dynamic GPU Frequency & P-State Governor for Nouveau Fermi (v2.2.1)
+nouveau-dynclockd — Dynamic GPU Frequency & P-State Governor for Nouveau Fermi (v2.3.0)
 Efficient, event-driven detection using kernel DRM client tracking, hardware interrupt rates,
 120 Hz display-aware idle floor clamping, per-application profiles, and PowerMizer hold-down hysteresis.
 
@@ -905,7 +905,7 @@ def main():
     init_idle = get_effective_idle_state((disp_clk, disp_ref, disp_active))
 
     print("================================================================================")
-    print(" 🚀 Nouveau Dynamic Frequency & P-State Governor (v2.2.1)")
+    print(" 🚀 Nouveau Dynamic Frequency & P-State Governor (v2.3.0)")
     print(f" • Configured Idle:    {config['IDLE_STATE']}")
     print(f" • Effective Floor:    {init_idle} (Display: {disp_clk/1000:.1f} MHz dot clk, {disp_ref} Hz)")
     print(f" • 120 Hz Floor Guard: {'Enabled (clamps to 07)' if config['DISPLAY_120HZ_FLOOR'] else 'Disabled'}")

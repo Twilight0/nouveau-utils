@@ -13,6 +13,7 @@ Designed to accompany the [`nouveau-dkms`](https://github.com/Twilight0/nouveau-
 | **`nouveau-dynclockd`** | Background system daemon monitoring hardware interrupt load, thermal conditions, high-refresh display state (120 Hz floor), and power source (AC/battery). |
 | **`nouveau-ctrl`** | Non-root command-line interface for querying clocks, setting P-states, toggling auto governor mode, and inspecting VRAM/thermal metrics. |
 | **`nouveau-tui`** | Real-time interactive curses terminal dashboard with live graphs, client process tracking, and instant P-state lock hotkeys. |
+| **`nouveau-recover`** | Opt-in development/testing GPU wedged-runlist recovery (`99-nouveau-recover.rules` + `nouveau-recover.service`) triggered by `nouveau-dkms` `WEDGED=rebind` uevents; **disabled by default** (`AUTO_RECOVER=false`). Enable via `nouveau-ctrl recover enable` or `nouveau-tui` (`w`). |
 
 ---
 
@@ -29,7 +30,7 @@ Designed to accompany the [`nouveau-dkms`](https://github.com/Twilight0/nouveau-
 ### Arch Linux / CachyOS / Manjaro
 ```bash
 # Using prebuilt package
-sudo pacman -U nouveau-utils-2.2.1-1-any.pkg.tar.zst
+sudo pacman -U nouveau-utils-2.3.0-1-any.pkg.tar.zst
 
 # Or from AUR
 yay -S nouveau-utils
@@ -40,13 +41,13 @@ makepkg -sric
 
 ### Debian / Ubuntu / Pop!_OS / Linux Mint
 ```bash
-sudo dpkg -i nouveau-utils_2.2.1-1_all.deb
+sudo dpkg -i nouveau-utils_2.3.0-1_all.deb
 sudo apt-get install -f
 ```
 
 ### Fedora / RHEL / openSUSE
 ```bash
-sudo dnf install nouveau-utils-2.2.1-1.noarch.rpm
+sudo dnf install nouveau-utils-2.3.0-1.noarch.rpm
 ```
 
 ### Manual Installation
@@ -72,7 +73,13 @@ nouveau-ctrl pstates
 nouveau-ctrl set 0f
 
 # Return to automatic governor mode
-nouveau-ctrl auto
+nouveau-ctrl set auto
+
+# Manage dev-only automatic wedged-GPU recovery (default: off)
+nouveau-ctrl recover status
+nouveau-ctrl recover enable     # Opt in: reload nouveau on WEDGED=rebind (stops desktop/DM)
+nouveau-ctrl recover disable    # Return to safe default (off)
+nouveau-ctrl recover now        # Trigger a one-shot manual GPU reload immediately
 ```
 
 ### TUI Dashboard (`nouveau-tui`)
@@ -80,13 +87,31 @@ nouveau-ctrl auto
 nouveau-tui
 ```
 * **Hotkeys:**
-  - `0`-`3`: Lock to performance level (`0` = deep idle, `3` = max 3D).
-  - `A`: Return to automatic governor mode.
-  - `R`: Force reload telemetry and daemon configuration.
-  - `Q` / `Esc`: Exit dashboard.
+  - `Space` / `Enter`: Lock selected P-state or toggle dynamic governor.
+  - `a`: Return to automatic governor mode.
+  - `t` / `-` / `+`: Adjust thermal throttle threshold (50–95 °C).
+  - `w`: Toggle dev-only automatic wedged-GPU recovery (`AUTO_RECOVER`).
+  - `R`: Force reload daemon configuration (`SIGHUP`).
+  - `q` / `Esc`: Exit dashboard.
 
 ### Configuration
 Edit `/etc/nouveau-dynclockd.conf` to configure polling intervals, PowerMizer hold timers, battery capping, and 120 Hz display floor protection. Custom per-application profiles can be placed in `/etc/nouveau-dynclockd.d/*.conf`.
+
+### Useful `nouveau-dkms` Kernel Module Options
+Set these in `/etc/modprobe.d/nouveau.conf` (or `/usr/lib/modprobe.d/nouveau.conf`) to control how `nouveau-dynclockd` / `nouveau-ctrl` interact with the kernel driver:
+
+| Option | Purpose for `nouveau-utils` |
+|---|---|
+| `vblank_continuous=1` | Keeps VBlank IRQs active on 120 Hz eDP panels and keeps `nouveau-dynclockd`'s display-mode floor guard reliable. |
+| `config=NvFermiMemReclock=true` | Enables Fermi DDR3 memory reclocking when `nouveau-dynclockd` / `nouveau-ctrl` switches P-states. |
+| `config=NvFermiSynthClocks=true` | Exposes board-verified synthetic P-states (`0a` intermediate and `10` OC, when defined in `quirks.h`) in debugfs `pstate`. |
+| `config=NvFermiVblankSync=true` | Synchronizes Fermi DDR3 memory transitions to VBlank (default: `true`). |
+| `config=NvClkMode=...` / `NvClkModeAC=...` / `NvClkModeDC=...` | Sets initial/fallback AC & DC P-states before `nouveau-dynclockd` starts (especially useful on Tesla & Kepler). |
+| `config=NvBoost=0\|1\|2` | Controls kernel boost level on supported GPUs (relevant when extending `nouveau-utils` to Kepler). |
+| `config=NvMemExec=false` | Dry-run safety mode for testing Tesla/Fermi/Kepler P-state switching without committing DRAM writes. |
+| `runpm=0` | Disables runtime PM on Optimus laptops when debugging clocks continuously (otherwise `nouveau-utils` avoids waking suspended dGPUs). |
+| `config=NvBios=<file>` | Loads a VBIOS image from `/lib/firmware` for testing without flashing EEPROM. |
+| `drm.edid_firmware=<conn>:<file>` | Enables displays missing EDID EEPROMs (`nouveau-dkms` `v2.4.2+`) so `nouveau-dynclockd` detects the real refresh rate. |
 
 ---
 

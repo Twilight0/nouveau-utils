@@ -2,6 +2,14 @@
 
 All notable changes to `nouveau-utils` are documented in this file.
 
+## [2.3.0] - 2026-11-27
+
+### Added
+- **Opt-in wedged-GPU auto-recovery (`nouveau-recover`, `nouveau-recover.service`, `99-nouveau-recover.rules`)**: Responds to `WEDGED=rebind` uevents emitted by `nouveau-dkms` by stopping the display manager and DRM holders, unbinding `vtconsole`, reloading `nouveau` (with PCI unbind/rebind fallback), and restoring the desktop. **Disabled by default** (`AUTO_RECOVER=false`) because it is targeted at driver/Mesa development environments rather than regular users.
+- **CLI recovery controls (`nouveau-ctrl recover`)**: Added `nouveau-ctrl recover [status|enable|disable|on|off|now]` and an `Auto-Recover` status line in `nouveau-ctrl status`.
+- **TUI recovery visibility & toggle (`nouveau-tui`)**: Added `Auto-Recover (Dev)` status row in Tab 3 (Telemetry) and the `w` hotkey to toggle `/etc/nouveau-recover.conf`.
+- **Tests & Documentation**: Added unit tests verifying default-off behavior and config toggling across `nouveau-recover`, `nouveau-ctrl`, and `nouveau-tui`; documented `nouveau-dkms` module options in `README.md`.
+
 ## [2.2.5] - 2026-11-24
 
 ### Fixed

@@ -1,3 +1,13 @@
+nouveau-utils (2.3.0-1) unstable; urgency=medium
+
+  * Release v2.3.0: Add opt-in dev-mode automatic wedged-GPU recovery (default: off).
+  * Add nouveau-recover, nouveau-recover.service, and 99-nouveau-recover.rules for
+    WEDGED=rebind uevents emitted by nouveau-dkms.
+  * Expose recovery management via nouveau-ctrl recover [status|enable|disable|now]
+    and nouveau-tui Telemetry tab / 'w' hotkey.
+
+ -- Twilight0 <twilight0@vivaldi.net>  Fri, 27 Nov 2026 10:55:00 +0200
+
 nouveau-utils (2.2.5-1) unstable; urgency=medium
 
   * Release v2.2.5: Fix post-S3 resume reclocking stall when debugfs pstate lacks '*'.

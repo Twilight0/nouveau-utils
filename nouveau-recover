@@ -1,0 +1,151 @@
+#!/usr/bin/env bash
+# Automatic Nouveau GPU recovery triggered by udev (WEDGED=rebind) or manually.
+# Disabled by default (dev/testing opt-in via 'nouveau-ctrl recover enable' or
+# AUTO_RECOVER=true in /etc/nouveau-recover.conf). Stops the running desktop /
+# DRM holders, unbinds fbcon, unloads and reloads nouveau (or falls back to PCI
+# unbind/rebind), then restores vtconsole and DM.
+set -uo pipefail
+
+LOCKFILE="/run/nouveau-recover.lock"
+STAMPFILE="/run/nouveau-recover.last"
+CONF="/etc/nouveau-recover.conf"
+COOLDOWN_SECS=30
+AUTO_RECOVER=false
+
+if [[ -r "$CONF" ]]; then
+    # shellcheck disable=SC1090
+    source "$CONF"
+fi
+
+log() {
+    echo "nouveau-recover: $*"
+    logger -t nouveau-recover "$*" 2>/dev/null || true
+}
+
+if [[ "${1:-}" != "--force" && "${AUTO_RECOVER}" != "true" ]]; then
+    log "AUTO_RECOVER is disabled (default); enable with 'nouveau-ctrl recover enable' or set AUTO_RECOVER=true in ${CONF}."
+    exit 0
+fi
+
+exec 9>"$LOCKFILE"
+if ! flock -n 9; then
+    log "recovery already in progress; exiting."
+    exit 0
+fi
+
+now=$(date +%s)
+if [[ "${1:-}" != "--force" && -f "$STAMPFILE" ]]; then
+    last=$(cat "$STAMPFILE" 2>/dev/null || echo 0)
+    if (( now - last < COOLDOWN_SECS )); then
+        log "cooldown active ($((now - last))s < ${COOLDOWN_SECS}s); refusing loop."
+        exit 0
+    fi
+fi
+echo "$now" > "$STAMPFILE"
+
+log "GPU wedged event received; beginning automatic Nouveau reload..."
+
+# Remember active services so we can restore them after reload.
+DYNCLOCK_ACTIVE=0
+if systemctl is-active --quiet nouveau-dynclockd.service 2>/dev/null; then
+    DYNCLOCK_ACTIVE=1
+    systemctl stop nouveau-dynclockd.service || true
+fi
+
+DM_SERVICE=""
+for svc in display-manager.service sddm.service gdm.service lightdm.service ly.service greetd.service; do
+    if systemctl is-active --quiet "$svc" 2>/dev/null; then
+        DM_SERVICE="$svc"
+        break
+    fi
+done
+
+if [[ -n "$DM_SERVICE" ]]; then
+    log "stopping display manager (${DM_SERVICE})..."
+    systemctl stop "$DM_SERVICE" || true
+fi
+
+# Terminate any remaining processes holding /dev/dri/card* or renderD*.
+kill_dri_holders() {
+    local sig="$1"
+    python3 - "$sig" <<'PYEOF'
+import os, signal, sys
+sig = int(sys.argv[1])
+me = os.getpid()
+pids = set()
+for entry in os.listdir("/proc"):
+    if not entry.isdigit():
+        continue
+    pid = int(entry)
+    if pid == me:
+        continue
+    fd_dir = f"/proc/{pid}/fd"
+    try:
+        for fd in os.listdir(fd_dir):
+            try:
+                target = os.readlink(f"{fd_dir}/{fd}")
+                if target.startswith("/dev/dri/card") or target.startswith("/dev/dri/renderD"):
+                    pids.add(pid)
+                    break
+            except OSError:
+                pass
+    except OSError:
+        pass
+for pid in pids:
+    try:
+        os.kill(pid, sig)
+    except OSError:
+        pass
+PYEOF
+}
+
+kill_dri_holders 15
+sleep 2
+kill_dri_holders 9
+sleep 1
+
+# Unbind fbcon / vtconsoles so nouveau module refcount drops to 0.
+for vt in /sys/class/vtconsole/vtcon*; do
+    [[ -w "$vt/bind" ]] && echo 0 > "$vt/bind" 2>/dev/null || true
+done
+
+RELOADED=0
+for attempt in 1 2 3 4 5; do
+    if modprobe -r nouveau 2>/dev/null; then
+        if modprobe nouveau; then
+            log "nouveau module unloaded and reloaded cleanly (attempt ${attempt})."
+            RELOADED=1
+            break
+        fi
+    fi
+    sleep 1
+done
+
+if [[ "$RELOADED" -eq 0 ]]; then
+    log "modprobe -r nouveau busy; attempting PCI driver unbind/rebind fallback..."
+    for dev in /sys/bus/pci/drivers/nouveau/0000:*; do
+        [[ -e "$dev" ]] || continue
+        bdf=$(basename "$dev")
+        echo "$bdf" > /sys/bus/pci/drivers/nouveau/unbind 2>/dev/null || true
+        sleep 1
+        echo "$bdf" > /sys/bus/pci/drivers/nouveau/bind 2>/dev/null || true
+        log "rebound PCI device ${bdf}."
+        RELOADED=1
+    done
+fi
+
+for vt in /sys/class/vtconsole/vtcon*; do
+    [[ -w "$vt/bind" ]] && echo 1 > "$vt/bind" 2>/dev/null || true
+done
+
+if [[ "$DYNCLOCK_ACTIVE" -eq 1 ]]; then
+    systemctl start nouveau-dynclockd.service || true
+fi
+
+if [[ -n "$DM_SERVICE" ]]; then
+    log "restarting display manager (${DM_SERVICE})..."
+    systemctl start "$DM_SERVICE" || true
+fi
+
+log "recovery finished (reloaded=${RELOADED})."
+exit 0

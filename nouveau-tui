@@ -19,6 +19,7 @@ import time
 PSTATE_PATH = "/sys/kernel/debug/dri/0/pstate"
 CLIENTS_PATH = "/sys/kernel/debug/dri/0/clients"
 CONFIG_PATH = "/etc/nouveau-dynclockd.conf"
+RECOVER_CONF_PATH = "/etc/nouveau-recover.conf"
 SNAPSHOT_DIR = "/run/nouveau"
 PSTATE_SNAPSHOT = os.path.join(SNAPSHOT_DIR, "pstate")
 CLIENTS_SNAPSHOT = os.path.join(SNAPSHOT_DIR, "clients")
@@ -97,6 +98,55 @@ def save_throttle_temp(temp):
         run_cmd(f"echo '{content}' | sudo tee {conf_path} >/dev/null")
 
     run_cmd("sudo systemctl kill -s HUP nouveau-dynclockd.service 2>/dev/null")
+
+def get_auto_recover_enabled(conf_path=None):
+    path = conf_path or RECOVER_CONF_PATH
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if line.startswith("AUTO_RECOVER="):
+                        val = line.split("=", 1)[1].strip().strip("\"'").lower()
+                        return val in ("true", "1", "yes", "on")
+        except Exception:
+            pass
+    return False
+
+def save_auto_recover_enabled(enabled, conf_path=None):
+    path = conf_path or RECOVER_CONF_PATH
+    val = "true" if enabled else "false"
+    lines = []
+    found = False
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                for line in f:
+                    if line.strip().startswith("AUTO_RECOVER="):
+                        lines.append(f"AUTO_RECOVER={val}\n")
+                        found = True
+                    else:
+                        lines.append(line)
+        except Exception:
+            pass
+    else:
+        lines.append("# Nouveau automatic wedged-GPU recovery (dev/testing opt-in; default: false)\n")
+    if not found:
+        lines.append(f"AUTO_RECOVER={val}\n")
+
+    content = "".join(lines)
+    try:
+        with open(path, "w") as f:
+            f.write(content)
+        return True
+    except PermissionError:
+        try:
+            res = subprocess.run(["sudo", "-n", "tee", path], input=content, text=True, capture_output=True, timeout=5)
+            return res.returncode == 0
+        except Exception:
+            return False
 
 def get_pstates():
     pstates = []
@@ -262,6 +312,7 @@ def get_telemetry():
         "pcie": pcie_str,
         "throttle_temp": throttle_temp,
         "daemon": daemon_active,
+        "auto_recover": get_auto_recover_enabled(),
         "power": power_str,
         "vram": vram_str,
         "mode": mode_str,
@@ -513,6 +564,7 @@ class NouveauTUI:
             row1 = [
                 ("r", "Poll Hardware Sensors"),
                 ("t / - / +", "Adjust Throttle Limit"),
+                ("w", "Toggle Auto-Recover (Dev)"),
             ]
             row2 = [
                 ("1..3", "Direct Tab"),
@@ -740,11 +792,13 @@ class NouveauTUI:
                 ("VRAM Usage", self.telemetry.get("vram", "N/A")),
                 ("Power Source", self.telemetry.get("power", "N/A")),
                 ("Dynamic Daemon", "Active / Running (Auto)" if self.telemetry.get("daemon") else "Inactive / Locked (Manual)"),
+                ("Auto-Recover (Dev)", "Enabled (WEDGED=rebind)" if self.telemetry.get("auto_recover") else "Disabled (Default)"),
                 ("Kernel Interface", PSTATE_PATH),
             ]
 
+            row_step = 2 if (y + len(stats_rows) * 2) <= max_drawable_y + 1 else 1
             for label, val in stats_rows:
-                if y + 1 >= max_drawable_y:
+                if y >= max_drawable_y:
                     break
                 self.safe_addstr(y, 6, f"{label:<24}: ", curses.A_BOLD)
                 if label == "Core Temperature":
@@ -760,10 +814,12 @@ class NouveauTUI:
                         val_col = curses.A_NORMAL
                 elif label == "Thermal Throttle Limit":
                     val_col = (self.red | curses.A_BOLD) if "THROTTLED" in val else self.green
+                elif label == "Auto-Recover (Dev)":
+                    val_col = (self.yellow | curses.A_BOLD) if self.telemetry.get("auto_recover") else curses.A_DIM
                 else:
                     val_col = self.green if ("Active" in val or "555M" in val or "RPM" in val or "Normal" in val) else (self.red if "THROTTLED" in val else self.yellow)
                 self.safe_addstr(y, 32, val[:cols - 34], val_col)
-                y += 2
+                y += row_step
 
         self.screen.refresh()
 
@@ -773,6 +829,7 @@ class NouveauTUI:
             ("Space / Enter",        "Lock P-State / Toggle Governor"),
             ("a",                    "Enable auto dynamic governor"),
             ("t / - / +",            "Adjust thermal throttle limit (50-95 °C)"),
+            ("w",                    "Toggle dev auto-recover on WEDGED=rebind"),
             ("r",                    "Refresh telemetry & hardware status"),
             ("1  2  3",              "Jump directly to mode tab"),
             ("← / →  Tab / S-Tab",   "Switch mode tabs"),
@@ -896,6 +953,21 @@ class NouveauTUI:
 
             elif ch == ord('t'):
                 self.prompt_throttle_temp()
+
+            elif ch == ord('w'):
+                new_val = not self.telemetry.get("auto_recover", False)
+                if save_auto_recover_enabled(new_val):
+                    self.telemetry["auto_recover"] = new_val
+                    if new_val:
+                        self.status_msg = "Auto-Recover (Dev) ENABLED for WEDGED=rebind uevents."
+                        self.status_color = 2
+                    else:
+                        self.status_msg = "Auto-Recover (Dev) DISABLED (default)."
+                        self.status_color = 1
+                else:
+                    self.status_msg = "Failed to update /etc/nouveau-recover.conf (run 'nouveau-ctrl recover enable|disable')."
+                    self.status_color = 3
+                self.refresh_data()
 
             elif ch == ord('r'):
                 self.refresh_data()

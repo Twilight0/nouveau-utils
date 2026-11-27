@@ -330,6 +330,49 @@ class TestNouveauCtrlParser(unittest.TestCase):
         )
         self.assertEqual(res.returncode, 0)
         self.assertIn("nouveau-ctrl", res.stdout)
+        self.assertIn("recover", res.stdout)
+
+    def test_recover_default_off_and_config_toggle(self):
+        """Auto-recovery must default to OFF (dev-only opt-in) across script, CLI, and TUI."""
+        # 1. Verify nouveau-recover script defaults AUTO_RECOVER=false
+        recover_path = os.path.join(REPO_ROOT, "nouveau-recover")
+        with open(recover_path, "r", encoding="utf-8") as f:
+            recover_lines = [l.strip() for l in f]
+        self.assertIn("AUTO_RECOVER=false", recover_lines)
+        self.assertNotIn("AUTO_RECOVER=true", recover_lines)
+
+        # 2. Verify nouveau-ctrl and nouveau-tui config helpers default False and toggle cleanly
+        tui = load_script_module("nouveau_tui", "nouveau-tui")
+        with tempfile.TemporaryDirectory(prefix="nouveau-recover-test.") as tmpdir:
+            conf = os.path.join(tmpdir, "nouveau-recover.conf")
+            self.assertFalse(self.ctrl.get_auto_recover_enabled(conf))
+            self.assertFalse(tui.get_auto_recover_enabled(conf))
+
+            # Enable via ctrl helper
+            self.assertTrue(self.ctrl.set_auto_recover_enabled(True, conf))
+            self.assertTrue(self.ctrl.get_auto_recover_enabled(conf))
+            self.assertTrue(tui.get_auto_recover_enabled(conf))
+
+            # Preserve extra settings when toggling back off via TUI helper
+            with open(conf, "a", encoding="utf-8") as f:
+                f.write("COOLDOWN_SECS=45\n")
+            self.assertTrue(tui.save_auto_recover_enabled(False, conf))
+            self.assertFalse(self.ctrl.get_auto_recover_enabled(conf))
+            self.assertFalse(tui.get_auto_recover_enabled(conf))
+            with open(conf, "r", encoding="utf-8") as f:
+                body = f.read()
+            self.assertIn("COOLDOWN_SECS=45", body)
+            self.assertIn("AUTO_RECOVER=false", body)
+
+        # 3. Verify `nouveau-ctrl recover status` CLI works unprivileged
+        res = subprocess.run(
+            [sys.executable, os.path.join(REPO_ROOT, "nouveau-ctrl"), "recover", "status"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("Auto-Recover", res.stdout)
 
 
 if __name__ == "__main__":

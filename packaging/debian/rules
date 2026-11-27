@@ -6,8 +6,11 @@ override_dh_auto_install:
 	install -Dm755 nouveau-ctrl debian/nouveau-utils/usr/bin/nouveau-ctrl
 	install -Dm755 nouveau-tui debian/nouveau-utils/usr/bin/nouveau-tui
 	install -Dm755 nouveau-dynclockd.py debian/nouveau-utils/usr/bin/nouveau-dynclockd.py
+	install -Dm755 nouveau-recover debian/nouveau-utils/usr/bin/nouveau-recover
 	ln -sf nouveau-dynclockd.py debian/nouveau-utils/usr/bin/nouveau-dynclockd
 	install -Dm644 nouveau-dynclockd.conf debian/nouveau-utils/etc/nouveau-dynclockd.conf
 	install -d debian/nouveau-utils/etc/nouveau-dynclockd.d
 	install -Dm644 apps.conf.sample debian/nouveau-utils/etc/nouveau-dynclockd.d/apps.conf.sample
 	install -Dm644 nouveau-dynclockd.service debian/nouveau-utils/lib/systemd/system/nouveau-dynclockd.service
+	install -Dm644 nouveau-recover.service debian/nouveau-utils/lib/systemd/system/nouveau-recover.service
+	install -Dm644 99-nouveau-recover.rules debian/nouveau-utils/lib/udev/rules.d/99-nouveau-recover.rules

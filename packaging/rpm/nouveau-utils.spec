@@ -1,5 +1,5 @@
 Name:           nouveau-utils
-Version:        2.2.5
+Version:        2.3.0
 Release:        1%{?dist}
 Summary:        Userspace dynamic governor, CLI, and TUI for Nouveau
 License:        GPL-2.0-only
@@ -10,8 +10,12 @@ Source2:        nouveau-dynclockd.service
 Source3:        nouveau-ctrl
 Source4:        nouveau-tui
 Source5:        apps.conf.sample
+Source6:        nouveau-recover
+Source7:        nouveau-recover.service
+Source8:        99-nouveau-recover.rules
 
 %{!?_unitdir: %define _unitdir %{_prefix}/lib/systemd/system}
+%{!?_udevrulesdir: %define _udevrulesdir %{_prefix}/lib/udev/rules.d}
 
 BuildArch:      noarch
 Requires:       python3
@@ -28,6 +32,7 @@ rm -rf %{buildroot}
 install -Dm755 %{SOURCE3} %{buildroot}%{_bindir}/nouveau-ctrl
 install -Dm755 %{SOURCE4} %{buildroot}%{_bindir}/nouveau-tui
 install -Dm755 %{SOURCE1} %{buildroot}%{_bindir}/nouveau-dynclockd.py
+install -Dm755 %{SOURCE6} %{buildroot}%{_bindir}/nouveau-recover
 ln -sf nouveau-dynclockd.py %{buildroot}%{_bindir}/nouveau-dynclockd
 
 # Configs
@@ -35,8 +40,10 @@ install -Dm644 %{SOURCE0} %{buildroot}%{_sysconfdir}/nouveau-dynclockd.conf
 mkdir -p %{buildroot}%{_sysconfdir}/nouveau-dynclockd.d
 install -Dm644 %{SOURCE5} %{buildroot}%{_sysconfdir}/nouveau-dynclockd.d/apps.conf.sample
 
-# Systemd unit
+# Systemd units & udev rules
 install -Dm644 %{SOURCE2} %{buildroot}%{_unitdir}/nouveau-dynclockd.service
+install -Dm644 %{SOURCE7} %{buildroot}%{_unitdir}/nouveau-recover.service
+install -Dm644 %{SOURCE8} %{buildroot}%{_udevrulesdir}/99-nouveau-recover.rules
 
 %post
 %systemd_post nouveau-dynclockd.service
@@ -52,12 +59,20 @@ install -Dm644 %{SOURCE2} %{buildroot}%{_unitdir}/nouveau-dynclockd.service
 %{_bindir}/nouveau-tui
 %{_bindir}/nouveau-dynclockd.py
 %{_bindir}/nouveau-dynclockd
+%{_bindir}/nouveau-recover
 %{_unitdir}/nouveau-dynclockd.service
+%{_unitdir}/nouveau-recover.service
+%{_udevrulesdir}/99-nouveau-recover.rules
 %config(noreplace) %{_sysconfdir}/nouveau-dynclockd.conf
 %dir %{_sysconfdir}/nouveau-dynclockd.d
 %{_sysconfdir}/nouveau-dynclockd.d/apps.conf.sample
 
 %changelog
+* Fri Nov 27 2026 Twilight0 <twilight0@vivaldi.net> - 2.3.0-1
+- Release v2.3.0: Add opt-in dev-mode automatic wedged-GPU recovery (default: off).
+- Add nouveau-recover helper, nouveau-recover.service, and 99-nouveau-recover.rules for WEDGED=rebind uevents.
+- Expose auto-recover status and toggle in nouveau-ctrl (recover [status|enable|disable|now]) and nouveau-tui (hotkey 'w').
+
 * Tue Nov 24 2026 Twilight0 <twilight0@vivaldi.net> - 2.2.5-1
 - Release v2.2.5: Fix post-S3 resume reclocking stall when debugfs pstate lacks '*'.
 - Re-apply target pstate in both manual lock and auto loops when get_current_pstate() returns None.

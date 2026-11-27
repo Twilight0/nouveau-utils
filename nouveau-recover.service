@@ -1,0 +1,9 @@
+[Unit]
+Description=Automatic Nouveau GPU Wedged Runlist Recovery
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/nouveau-recover
+StandardOutput=journal
+StandardError=journal

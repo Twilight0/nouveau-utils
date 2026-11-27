@@ -1,0 +1,3 @@
+# Automatically trigger Nouveau recovery when the kernel emits WEDGED=rebind
+# after unrecoverable FIFO/PGRAPH runlist RC failure (nouveau-dkms 0016).
+ACTION=="change", SUBSYSTEM=="pci", DRIVER=="nouveau", ENV{WEDGED}=="rebind", TAG+="systemd", ENV{SYSTEMD_WANTS}="nouveau-recover.service"

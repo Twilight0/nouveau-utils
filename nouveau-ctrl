@@ -6,6 +6,7 @@ Usage:
   nouveau-ctrl set <03|07|0f|10|auto>
   nouveau-ctrl set_throttle_temp <temp>
   nouveau-ctrl daemon [start|stop|status|restart|enable|disable|reload]
+  nouveau-ctrl recover [status|enable|disable|now]
   nouveau-ctrl watch [-i SECONDS]
 """
 import argparse
@@ -29,6 +30,8 @@ CLIENTS_CANDIDATES = [
 ]
 HWMON_GLOB = "/sys/class/drm/card0/device/hwmon/hwmon*/"
 CONFIG_PATH = "/etc/nouveau-dynclockd.conf"
+RECOVER_CONF_PATH = "/etc/nouveau-recover.conf"
+RECOVER_BIN = "/usr/bin/nouveau-recover"
 POWER_SUPPLY_BASE = "/sys/class/power_supply"
 VRAM_DEBUGFS_CANDIDATES = [
     "/sys/kernel/debug/dri/0/ttm_vram",
@@ -121,6 +124,57 @@ def get_config_throttle_temp():
         except Exception:
             pass
     return 80
+
+def get_auto_recover_enabled(conf_path=None):
+    """Reads AUTO_RECOVER setting from /etc/nouveau-recover.conf (defaults to False)."""
+    path = conf_path or RECOVER_CONF_PATH
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if line.startswith("AUTO_RECOVER="):
+                        val = line.split("=", 1)[1].strip().strip("\"'").lower()
+                        return val in ("true", "1", "yes", "on")
+        except Exception:
+            pass
+    return False
+
+def set_auto_recover_enabled(enabled, conf_path=None):
+    """Persists AUTO_RECOVER=true|false in /etc/nouveau-recover.conf."""
+    path = conf_path or RECOVER_CONF_PATH
+    val = "true" if enabled else "false"
+    lines = []
+    found = False
+    if os.path.exists(path):
+        try:
+            with open(path, "r") as f:
+                for line in f:
+                    if line.strip().startswith("AUTO_RECOVER="):
+                        lines.append(f"AUTO_RECOVER={val}\n")
+                        found = True
+                    else:
+                        lines.append(line)
+        except Exception:
+            pass
+    else:
+        lines.append("# Nouveau automatic wedged-GPU recovery (dev/testing opt-in; default: false)\n")
+    if not found:
+        lines.append(f"AUTO_RECOVER={val}\n")
+
+    content = "".join(lines)
+    try:
+        with open(path, "w") as f:
+            f.write(content)
+        return True
+    except PermissionError:
+        try:
+            res = subprocess.run(["sudo", "tee", path], input=content, text=True, capture_output=True, timeout=10)
+            return res.returncode == 0
+        except Exception:
+            return False
 
 def get_pstates_data(bypass_snapshot=False):
     raw = read_privileged_file(PSTATE_CANDIDATES, bypass_snapshot=bypass_snapshot)
@@ -429,6 +483,8 @@ def cmd_status(args):
         pcie_str = "N/A"
 
     daemon_str = f"\033[32mActive (running)\033[0m" if daemon == "active" else f"\033[33m{daemon}\033[0m"
+    recover_enabled = get_auto_recover_enabled()
+    recover_str = "\033[33;1mEnabled (Dev — reloads on WEDGED=rebind)\033[0m" if recover_enabled else "\033[2mDisabled (Default)\033[0m"
 
     power = get_power_source()
     power_str = {"AC": "AC (unlimited 0f/10)", "BAT": "Battery DC (capped 07)"}.get(power, "Unknown")
@@ -448,6 +504,7 @@ def cmd_status(args):
     print(f" • VRAM Usage:     {vram_str}")
     print(f" • Power Source:   {power_str}")
     print(f" • Dynamic Daemon: nouveau-dynclockd ({daemon_str})")
+    print(f" • Auto-Recover:   {recover_str}")
     print("--------------------------------------------------------------------------------")
 
     # P-States Table
@@ -590,6 +647,41 @@ def cmd_daemon(args):
     else:
         subprocess.run(["sudo", "systemctl", action, "nouveau-dynclockd.service"])
 
+def cmd_recover(args):
+    action = (args.action or "status").lower()
+    if action in ("on", "enable"):
+        if not set_auto_recover_enabled(True):
+            print(f"[!] Failed to write {RECOVER_CONF_PATH}. Check permissions or run with sudo.", file=sys.stderr)
+            sys.exit(1)
+        subprocess.run(["sudo", "-n", "udevadm", "control", "--reload-rules"], capture_output=True)
+        print(f"[✓] Automatic wedged-GPU recovery ENABLED in {RECOVER_CONF_PATH} (dev mode).")
+        print("    Note: When the kernel emits WEDGED=rebind, nouveau-recover will stop the desktop/DM and reload nouveau.")
+    elif action in ("off", "disable"):
+        if not set_auto_recover_enabled(False):
+            print(f"[!] Failed to write {RECOVER_CONF_PATH}. Check permissions or run with sudo.", file=sys.stderr)
+            sys.exit(1)
+        print(f"[✓] Automatic wedged-GPU recovery DISABLED in {RECOVER_CONF_PATH} (default).")
+    elif action == "status":
+        enabled = get_auto_recover_enabled()
+        state = "\033[33;1mENABLED (dev mode)\033[0m" if enabled else "\033[32mDISABLED (default)\033[0m"
+        print(f"Auto-Recover (WEDGED=rebind): {state}")
+        print(f"Config file:                  {RECOVER_CONF_PATH}")
+        if not enabled:
+            print("Enable for development/testing with: nouveau-ctrl recover enable")
+        else:
+            print("Disable with:                        nouveau-ctrl recover disable")
+    elif action in ("now", "trigger"):
+        recover_bin = RECOVER_BIN if os.path.exists(RECOVER_BIN) else os.path.join(os.path.dirname(os.path.abspath(__file__)), "nouveau-recover")
+        if not os.path.exists(recover_bin):
+            print(f"[!] Recovery helper not found at {RECOVER_BIN}.", file=sys.stderr)
+            sys.exit(1)
+        print("[*] Triggering manual Nouveau GPU reload (stops desktop/DM, reloads nouveau)...")
+        res = subprocess.run(["sudo", recover_bin, "--force"])
+        sys.exit(res.returncode)
+    else:
+        print("Usage: nouveau-ctrl recover [status|enable|disable|on|off|now]", file=sys.stderr)
+        sys.exit(1)
+
 def cmd_watch(args):
     interval = max(0.5, args.interval)
     try:
@@ -606,7 +698,7 @@ def cmd_help(args, parsers):
         if args.topic in parsers:
             parsers[args.topic].print_help()
             return
-        print(f"Unknown help topic '{args.topic}'. Available commands: status, set, set_throttle_temp, daemon, watch, help", file=sys.stderr)
+        print(f"Unknown help topic '{args.topic}'. Available commands: status, set, set_throttle_temp, daemon, recover, watch, help", file=sys.stderr)
         return
     parsers["_root"].print_help()
 
@@ -621,6 +713,7 @@ Commands:
   set <03|07|0f|10|auto>     Lock performance state or return to dynamic governor
   set_throttle_temp <temp>   Configure dynamic governor thermal throttle threshold in °C (default: 80)
   daemon [action]            Manage the background governor (start|stop|status|restart|reload)
+  recover [action]           Dev-only automatic wedged-GPU recovery (status|enable|disable|now; default: off)
   watch [-i SECONDS]         Live monitoring dashboard (top-like view)
   help [command]             Show this help message or details for a command
 
@@ -629,6 +722,7 @@ Examples:
   nouveau-ctrl set 0f              # Lock to full 3D performance (590 MHz / 900 MHz)
   nouveau-ctrl set auto            # Return to dynamic frequency governor
   nouveau-ctrl set_throttle_temp 80 # Cap to state 07 at 80 °C
+  nouveau-ctrl recover enable      # Opt in to auto-reload on WEDGED=rebind (dev environments)
   nouveau-ctrl watch -i 0.5        # Fast refresh live monitor
 """
     )
@@ -649,11 +743,15 @@ Examples:
     s3.add_argument("action", nargs="?", default="status", help="start | stop | status | restart | enable | disable | reload")
     s3.set_defaults(func=cmd_daemon)
 
+    s_rec = sub.add_parser("recover", help="Manage dev-only automatic wedged-GPU recovery (default: off)")
+    s_rec.add_argument("action", nargs="?", default="status", help="status | enable | disable | on | off | now")
+    s_rec.set_defaults(func=cmd_recover)
+
     s4 = sub.add_parser("watch", help="Live top-like monitoring dashboard")
     s4.add_argument("-i", "--interval", type=float, default=1.0, help="Refresh interval in seconds (default: 1.0)")
     s4.set_defaults(func=cmd_watch)
 
-    parsers = {"_root": p, "status": s, "set": s2, "set_throttle_temp": s_temp, "daemon": s3, "watch": s4}
+    parsers = {"_root": p, "status": s, "set": s2, "set_throttle_temp": s_temp, "daemon": s3, "recover": s_rec, "watch": s4}
 
     s5 = sub.add_parser("help", help="Display help information")
     s5.add_argument("topic", nargs="?", help="Specific command to get help for")

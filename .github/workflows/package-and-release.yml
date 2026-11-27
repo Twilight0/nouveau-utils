@@ -40,9 +40,12 @@ jobs:
           test -x /tmp/nouveau-utils-stage/usr/bin/nouveau-ctrl
           test -x /tmp/nouveau-utils-stage/usr/bin/nouveau-tui
           test -x /tmp/nouveau-utils-stage/usr/bin/nouveau-dynclockd.py
+          test -x /tmp/nouveau-utils-stage/usr/bin/nouveau-recover
           test -L /tmp/nouveau-utils-stage/usr/bin/nouveau-dynclockd
           test -f /tmp/nouveau-utils-stage/etc/nouveau-dynclockd.conf
           test -f /tmp/nouveau-utils-stage/usr/lib/systemd/system/nouveau-dynclockd.service
+          test -f /tmp/nouveau-utils-stage/usr/lib/systemd/system/nouveau-recover.service
+          test -f /tmp/nouveau-utils-stage/usr/lib/udev/rules.d/99-nouveau-recover.rules
 
   build-arch:
     name: Build Arch Linux Package (.pkg.tar.zst)
@@ -119,7 +122,9 @@ jobs:
           rpmdev-setuptree
           cp packaging/rpm/nouveau-utils.spec ~/rpmbuild/SPECS/
           cp nouveau-dynclockd.conf nouveau-dynclockd.py nouveau-dynclockd.service \
-             nouveau-ctrl nouveau-tui apps.conf.sample ~/rpmbuild/SOURCES/
+             nouveau-ctrl nouveau-tui apps.conf.sample \
+             nouveau-recover nouveau-recover.service 99-nouveau-recover.rules \
+             ~/rpmbuild/SOURCES/
 
       - name: Build RPM package
         run: |
