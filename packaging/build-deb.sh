@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-VERSION="2.3.0"
+VERSION="2.3.1"
 PKGNAME="nouveau-utils"
 ARCH="all"
 DEB_NAME="${PKGNAME}_${VERSION}-1_${ARCH}.deb"

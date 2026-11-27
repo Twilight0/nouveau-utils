@@ -77,7 +77,13 @@ for entry in os.listdir("/proc"):
     if not entry.isdigit():
         continue
     pid = int(entry)
-    if pid == me:
+    if pid in (1, me):
+        continue
+    try:
+        comm = open(f"/proc/{pid}/comm").read().strip()
+    except OSError:
+        continue
+    if comm in ("systemd", "systemd-logind"):
         continue
     fd_dir = f"/proc/{pid}/fd"
     try:

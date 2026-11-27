@@ -2,6 +2,12 @@
 
 All notable changes to `nouveau-utils` are documented in this file.
 
+## [2.3.1] - 2026-11-27
+
+### Fixed
+- **Safe DRM client teardown (`nouveau-recover`)**: Skip PID 1 (`systemd`) and `systemd-logind` when terminating processes holding `/dev/dri/card*` or `/dev/dri/renderD*` before unloading `nouveau`. Both services hold DRM file descriptors for session master handover and must not be signaled during GPU recovery.
+- **Tests**: Added regression assertion in `tests/test_nouveau_utils.py` verifying `nouveau-recover` excludes PID 1, `systemd`, and `systemd-logind`.
+
 ## [2.3.0] - 2026-11-27
 
 ### Added

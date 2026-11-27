@@ -334,12 +334,15 @@ class TestNouveauCtrlParser(unittest.TestCase):
 
     def test_recover_default_off_and_config_toggle(self):
         """Auto-recovery must default to OFF (dev-only opt-in) across script, CLI, and TUI."""
-        # 1. Verify nouveau-recover script defaults AUTO_RECOVER=false
+        # 1. Verify nouveau-recover script defaults AUTO_RECOVER=false and skips systemd/logind
         recover_path = os.path.join(REPO_ROOT, "nouveau-recover")
         with open(recover_path, "r", encoding="utf-8") as f:
-            recover_lines = [l.strip() for l in f]
+            recover_text = f.read()
+        recover_lines = [l.strip() for l in recover_text.splitlines()]
         self.assertIn("AUTO_RECOVER=false", recover_lines)
         self.assertNotIn("AUTO_RECOVER=true", recover_lines)
+        self.assertIn("systemd-logind", recover_text)
+        self.assertIn("pid in (1, me)", recover_text)
 
         # 2. Verify nouveau-ctrl and nouveau-tui config helpers default False and toggle cleanly
         tui = load_script_module("nouveau_tui", "nouveau-tui")

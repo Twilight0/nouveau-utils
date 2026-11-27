@@ -1,3 +1,10 @@
+nouveau-utils (2.3.1-1) unstable; urgency=medium
+
+  * Release v2.3.1: Avoid signaling PID 1 (systemd) and systemd-logind during
+    wedged-GPU DRM client teardown in nouveau-recover.
+
+ -- Twilight0 <twilight0@vivaldi.net>  Fri, 27 Nov 2026 12:36:00 +0200
+
 nouveau-utils (2.3.0-1) unstable; urgency=medium
 
   * Release v2.3.0: Add opt-in dev-mode automatic wedged-GPU recovery (default: off).

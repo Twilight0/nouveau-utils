@@ -1,5 +1,5 @@
 Name:           nouveau-utils
-Version:        2.3.0
+Version:        2.3.1
 Release:        1%{?dist}
 Summary:        Userspace dynamic governor, CLI, and TUI for Nouveau
 License:        GPL-2.0-only
@@ -68,6 +68,9 @@ install -Dm644 %{SOURCE8} %{buildroot}%{_udevrulesdir}/99-nouveau-recover.rules
 %{_sysconfdir}/nouveau-dynclockd.d/apps.conf.sample
 
 %changelog
+* Fri Nov 27 2026 Twilight0 <twilight0@vivaldi.net> - 2.3.1-1
+- Release v2.3.1: Skip PID 1 (systemd) and systemd-logind in nouveau-recover DRM teardown.
+
 * Fri Nov 27 2026 Twilight0 <twilight0@vivaldi.net> - 2.3.0-1
 - Release v2.3.0: Add opt-in dev-mode automatic wedged-GPU recovery (default: off).
 - Add nouveau-recover helper, nouveau-recover.service, and 99-nouveau-recover.rules for WEDGED=rebind uevents.

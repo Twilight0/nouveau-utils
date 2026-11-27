@@ -1,6 +1,6 @@
 # Maintainer: Twilight0 <https://github.com/Twilight0>
 pkgname=nouveau-utils
-pkgver=2.3.0
+pkgver=2.3.1
 pkgrel=1
 pkgdesc="Userspace dynamic frequency governor, CLI management tool, and interactive TUI for Nouveau"
 arch=('any')
@@ -25,12 +25,12 @@ source=(
   "99-nouveau-recover.rules"
 )
 sha256sums=('cbe2d1ce8a7331e2cee2da2cc17afb8ec15b3164fdea5d068c42f0554b278081'
-            '703330f767f5271beaf93a4527b74bdf26e185593fc2af96bcf69ae92aa9277d'
+            '366dc32252944a78cc2b36cd93a55b0f1807ee677005110f837dc98a4b4fbe18'
             '87f698b1de37689cb3889bfae916ceaba1caca634ab6a653b1602bda613b20e4'
             '37c33bc9254734c98f932caa8a52cd1d5fa10efe0ecc78c7fc71ca8ab3830029'
             '95a2209b11293df0380390984cd1d9b377523cbb907cdcb274a79dfed39e3453'
             'e5564d33b86b27af9cb46b2bfc26b4d09e222654f2f887522a2fa9426dae8fea'
-            'e9c54d70907ccd95ab875f25fe5622879e4ca844594e8344c25504acb021c7d9'
+            '51c64c395dfdb89d7ea5c2c470d24505f056deddf4cbab2c5b7b39178a8d7c4d'
             '63c8d6185a31cf5d31410cfd52e4b0d749e0f931bf3c042f8cc4b5d6f9912cba'
             '9c4bb66b5398365a88cbaf2856274b4c118b7859fdda1307b090223e6aa72946')
 

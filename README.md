@@ -30,7 +30,7 @@ Designed to accompany the [`nouveau-dkms`](https://github.com/Twilight0/nouveau-
 ### Arch Linux / CachyOS / Manjaro
 ```bash
 # Using prebuilt package
-sudo pacman -U nouveau-utils-2.3.0-1-any.pkg.tar.zst
+sudo pacman -U nouveau-utils-2.3.1-1-any.pkg.tar.zst
 
 # Or from AUR
 yay -S nouveau-utils
@@ -41,13 +41,13 @@ makepkg -sric
 
 ### Debian / Ubuntu / Pop!_OS / Linux Mint
 ```bash
-sudo dpkg -i nouveau-utils_2.3.0-1_all.deb
+sudo dpkg -i nouveau-utils_2.3.1-1_all.deb
 sudo apt-get install -f
 ```
 
 ### Fedora / RHEL / openSUSE
 ```bash
-sudo dnf install nouveau-utils-2.3.0-1.noarch.rpm
+sudo dnf install nouveau-utils-2.3.1-1.noarch.rpm
 ```
 
 ### Manual Installation
